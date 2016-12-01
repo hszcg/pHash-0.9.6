@@ -78,6 +78,7 @@ PHP_MINFO_FUNCTION(pHash);
 
 
 #if HAVE_VIDEO_HASH
+
 PHP_FUNCTION(ph_dct_videohash);
 #if (PHP_MAJOR_VERSION >= 5)
 ZEND_BEGIN_ARG_INFO_EX(ph_dct_videohash_arg_info, ZEND_SEND_BY_VAL, ZEND_RETURN_VALUE, 1)
@@ -87,7 +88,19 @@ ZEND_END_ARG_INFO()
 #define ph_dct_videohash_arg_info NULL
 #endif
 
+// [IP] Custom function
+PHP_FUNCTION(ph_dct_videohash2);
+#if (PHP_MAJOR_VERSION >= 5)
+ZEND_BEGIN_ARG_INFO_EX(ph_dct_videohash2_arg_info, ZEND_SEND_BY_VAL, ZEND_RETURN_VALUE, 1)
+  ZEND_ARG_INFO(0, file)
+ZEND_END_ARG_INFO()
+#else /* PHP 4.x */
+#define ph_dct_videohash2_arg_info NULL
+#endif
+
 #endif /* HAVE_VIDEO_HASH */
+
+
 #if HAVE_IMAGE_HASH
 PHP_FUNCTION(ph_dct_imagehash);
 #if (PHP_MAJOR_VERSION >= 5)
@@ -133,7 +146,9 @@ ZEND_END_ARG_INFO()
 #endif
 
 #endif /* HAVE_IMAGE_HASH */
+
 #if HAVE_VIDEO_HASH
+
 PHP_FUNCTION(ph_video_dist);
 #if (PHP_MAJOR_VERSION >= 5)
 ZEND_BEGIN_ARG_INFO_EX(ph_video_dist_arg_info, ZEND_SEND_BY_VAL, ZEND_RETURN_VALUE, 2)
@@ -145,7 +160,21 @@ ZEND_END_ARG_INFO()
 #define ph_video_dist_arg_info NULL
 #endif
 
+// [IP] Our custom function
+PHP_FUNCTION(ph_video_dist2);
+#if (PHP_MAJOR_VERSION >= 5)
+ZEND_BEGIN_ARG_INFO_EX(ph_video_dist2_arg_info, ZEND_SEND_BY_VAL, ZEND_RETURN_VALUE, 2)
+  ZEND_ARG_INFO(0, h1)
+  ZEND_ARG_INFO(0, h2)
+  ZEND_ARG_INFO(0, thresh)
+ZEND_END_ARG_INFO()
+#else /* PHP 4.x */
+#define ph_video_dist_arg_info NULL
+#endif
+
 #endif /* HAVE_VIDEO_HASH */
+
+
 #if HAVE_AUDIO_HASH
 PHP_FUNCTION(ph_audio_dist);
 #if (PHP_MAJOR_VERSION >= 5)

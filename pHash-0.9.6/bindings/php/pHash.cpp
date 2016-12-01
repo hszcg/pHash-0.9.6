@@ -12,9 +12,16 @@
    +----------------------------------------------------------------------+
 */
 
+/* 
+	Modified by Ivan Pizhenko <ivan [dot] pizhenko [at] gmail [dot] com >. 
+*/
+
 /* $ Id: $ */
 
 #include "php_pHash.h"
+#include <cctype>
+#include <cstring>
+#include <algorithm>
 
 #if HAVE_PHASH
 
@@ -98,6 +105,7 @@ extern "C" void ph_txt_hash_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 zend_function_entry pHash_functions[] = {
 #if HAVE_VIDEO_HASH
 	PHP_FE(ph_dct_videohash    , ph_dct_videohash_arg_info)
+	PHP_FE(ph_dct_videohash2   , ph_dct_videohash2_arg_info) // [IP] custom functions
 #endif /* HAVE_VIDEO_HASH */
 #if HAVE_IMAGE_HASH
 	PHP_FE(ph_dct_imagehash    , ph_dct_imagehash_arg_info)
@@ -111,6 +119,7 @@ zend_function_entry pHash_functions[] = {
 #endif /* HAVE_IMAGE_HASH */
 #if HAVE_VIDEO_HASH
 	PHP_FE(ph_video_dist       , ph_video_dist_arg_info)
+	PHP_FE(ph_video_dist2      , ph_video_dist2_arg_info)
 #endif /* HAVE_VIDEO_HASH */
 #if HAVE_AUDIO_HASH
 	PHP_FE(ph_audio_dist       , ph_audio_dist_arg_info)
@@ -259,6 +268,59 @@ PHP_FUNCTION(ph_dct_videohash)
 }
 /* }}} ph_dct_videohash */
 
+static inline void put_hex_symbol(char* pdest, unsigned char hex)
+{
+	*pdest = hex + ((hex < 10) ? '0' : 'A' - 10);
+}
+
+/* {{{ proto string ph_video_hash ph_dct_videohash2(string file)
+  pHash DCT video hash as string */
+PHP_FUNCTION(ph_dct_videohash2)
+{
+	const char * file = NULL;
+	int file_len = 0;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &file, &file_len) == FAILURE) {
+		return;
+	}
+
+	//printf("File: %s\n", file);
+	
+	// compute pHash
+	int len = 0;
+	ulong64 *video_hash = ph_dct_videohash(file, len);
+	//printf("Hash Length: %d\n", len);
+	if(video_hash) {
+		//printf("Hash Length: %d\n", len);
+		// allocate memory for output string
+		char* hashstr =  static_cast<char*>(emalloc(len * 16 + 1));
+		if (hashstr) {
+			// build output string
+			char* dest = hashstr;
+			const unsigned char* src = reinterpret_cast<unsigned char*>(video_hash);
+			const unsigned char* src_end = src + len * 8;
+			while (src != src_end) {
+				put_hex_symbol(dest++, (*src) >> 4);
+				put_hex_symbol(dest++, (*src) & 0xF);
+				++src;
+			}
+			*dest = 0;
+			
+			// free memory allocated by pHash
+			free(video_hash);
+			
+			//printf("Hash: %s\n", hashstr);
+			
+			RETURN_STRING(hashstr, 0);
+		} else {
+			// free memory allocated by pHash
+			free(video_hash);
+		}
+	}
+	RETURN_FALSE;
+}
+/* }}} ph_dct_videohash2 */
+
 #endif /* HAVE_VIDEO_HASH */
 
 #if HAVE_IMAGE_HASH
@@ -346,8 +408,6 @@ PHP_FUNCTION(ph_audiohash)
 	long sample_rate = 5512;
 	long channels = 1;
 
-
-
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|ll", &file, &file_len, &sample_rate, &channels) == FAILURE) {
 		return;
 	}
@@ -418,29 +478,28 @@ PHP_FUNCTION(ph_image_dist)
 
 #endif /* HAVE_IMAGE_HASH */
 
+
 #if HAVE_VIDEO_HASH
-/* {{{ proto float ph_video_dist(resource ph_video_hash h1,resource ph_video_hash h2, int thresh=21)
+
+/* {{{ proto float ph_video_dist2(resource ph_video_hash h1,resource ph_video_hash h2, int thresh=21)
   pHash video distance. */
 PHP_FUNCTION(ph_video_dist)
 {
 	zval * h1_res = NULL;
 	int h1_resid = -1;
-	ph_video_hash * h1;
+	ph_video_hash * h1 = NULL;
+
 	zval * h2_res = NULL;
 	int h2_resid = -1;
-	ph_video_hash * h2;
+	ph_video_hash * h2 = NULL;
 
 	long thresh = 21;
-
-
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr|l", &h1_res, &h2_res, &thresh) == FAILURE) {
 		return;
 	}
 	ZEND_FETCH_RESOURCE(h1, ph_video_hash *, &h1_res, h1_resid, "ph_video_hash", le_ph_video_hash);
 	ZEND_FETCH_RESOURCE(h2, ph_video_hash *, &h2_res, h2_resid, "ph_video_hash", le_ph_video_hash);
-
-
 
 	if(h1 && h2)
 	{
@@ -452,7 +511,161 @@ PHP_FUNCTION(ph_video_dist)
 }
 /* }}} ph_video_dist */
 
+
+static inline unsigned char decode_hex_char(char ch)
+{
+	if (isdigit(ch)) {
+		return ch - '0';
+	} else if (isupper(ch)) {
+		return ch - 'A' + 10;
+	} else {
+		return ch - 'a' + 10;
+	}	
+}
+
+static bool decode_hex_string(unsigned char* dest, const char* src)
+{
+	while (*src) {
+		char ch_hi = *src++;
+		if (!isxdigit(ch_hi)) {
+			return false;
+		}
+
+		char ch_lo = *src++;
+		if (!isxdigit(ch_lo)) {
+			return false;
+		}
+
+		*dest++ = (decode_hex_char(ch_hi) << 4) 
+			| decode_hex_char(ch_lo);
+	}
+	return true;
+}
+
+template<class T>
+struct emem_ptr
+{
+	emem_ptr(T* p) : m_p(p) {}
+	emem_ptr(void* p) : m_p(static_cast<T*>(p)) {}
+	~emem_ptr() { if(m_p) efree(m_p); }
+	operator bool() const { return m_p != 0; }
+	T* m_p;
+};
+
+// [IP] fast hamming distance computation with GCC specific code
+#define fast_hamming_distance_gcc(a, b) __builtin_popcountll((a) ^ (b))
+
+
+// [IP] custom distance computations suitable for long videos
+// based on the original libphash function ph_dct_videohash_dist()
+static int ph_dct_videohash_dist2x(
+	const ulong64 *hashA, int N1, 
+	const ulong64 *hashB, int N2, 
+	const int threshold, double* result)
+{
+    size_t sa = N1 + 1;
+    size_t sb = N2 + 1; 
+    emem_ptr<int> C(emalloc(sa * sb * sizeof(int)));
+    if (!C) {
+	    return -1;
+    }
+
+    int *p = C.m_p + sb;
+    for (size_t i = 1; i < sa; ++i, p += sb) {
+	    *p = 0;
+    }
+    memset(C.m_p, 0, sb * sizeof(int));
+
+    p = C.m_p + sb + 1;
+    const ulong64* hA = hashA;
+    for (size_t i = 1; i < sa; ++i, ++p, ++hA) {
+	const ulong64* hB = hashB;
+	for (size_t j = 1; j < sb; ++j, ++p, ++hB) {
+	    int d = fast_hamming_distance_gcc(*hA, *hB);
+	    if (d <= threshold) {
+		*p = *(p - sb - 1) + 1;
+	    } else {
+		*p = std::max(*(p - sb), *(p-1));
+	    }
+	}
+    }
+
+    *result = static_cast<double>(C.m_p[N1 * sb + N2]) 
+	    / static_cast<double>(std::min(N1, N2));
+
+    return 0;
+}
+
+// [IP] Our custom functon
+/* {{{ proto float ph_video_dist2(string h1, string h2, int thresh=21)
+  pHash video distance (hashes as strings). */
+PHP_FUNCTION(ph_video_dist2)
+{
+	const char* str_h1 = NULL;
+	int h1_len = 0;
+
+	const char* str_h2 = NULL;
+	int h2_len = 0;
+
+	long thresh = 21;
+
+	// parse functions parameters
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss|l", &str_h1, &h1_len, &str_h2, &h2_len, &thresh) == FAILURE) {
+		return;
+	}
+	
+	// printf("h1=%s\nh2=%s\n", str_h1, str_h2);
+
+	// validate hash string lengths
+	if(h1_len == 0 || h2_len == 0 || h1_len % 16 != 0 || h2_len % 16 != 0) {
+		RETURN_DOUBLE(-1);
+	}
+	//printf(">>> 1\n");
+	
+	// allocate buffer for hash1
+	emem_ptr<unsigned char> bh1(emalloc(h1_len / 2));
+	if(!bh1) {
+		RETURN_DOUBLE(-2);
+	}
+	//printf(">>> 2\n");
+
+	// decode string hash #1 into the binary form
+	if(!decode_hex_string(bh1.m_p, str_h1)) {
+		RETURN_DOUBLE(-3);
+	}
+	//printf(">>> 3\n");
+	
+	// allocate buffer for hash2
+	emem_ptr<unsigned char> bh2(emalloc(h2_len / 2));
+	if(!bh2) {
+		RETURN_DOUBLE(-4);
+	}
+	//printf(">>> 4\n");
+
+	// decode string hash #1 into the binary form
+	if(!decode_hex_string(bh2.m_p, str_h2)) {
+		RETURN_DOUBLE(-5);
+	}
+	//printf(">>> 5\n");
+
+	double sim = 0.0;
+	if(ph_dct_videohash_dist2x(
+		reinterpret_cast<const ulong64*>(bh1.m_p), h1_len / 16, 
+		reinterpret_cast<const ulong64*>(bh2.m_p), h2_len / 16,
+		thresh, &sim) < 0) {
+		//printf(">>> 6\n");
+		RETURN_DOUBLE(-6);
+	}
+
+	//printf(">>> 7\n");
+	//printf("Result: %.8f\n", sim);
+
+	RETURN_DOUBLE(sim);
+}
+/* }}} ph_video_dist */
+
 #endif /* HAVE_VIDEO_HASH */
+
 
 #if HAVE_AUDIO_HASH
 /* {{{ proto float ph_audio_dist(resource ph_audio_hash h1,resource ph_audio_hash h2,
