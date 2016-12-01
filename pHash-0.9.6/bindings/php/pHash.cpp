@@ -23,6 +23,17 @@
 #include <cstring>
 #include <algorithm>
 
+// #define DEBUG_NEW_VIDEO_PHASH
+#ifdef DEBUG_NEW_VIDEO_PHASH
+#define dbg_printf1(fmt, arg1) printf(fmt, arg1)
+#define dbg_printf2(fmt, arg1, arg2) printf(fmt, arg1, arg2)
+#define dbg_printf3(fmt, arg1, arg2, arg3) printf(fmt, arg1, arg2, arg3)
+#else
+#define dbg_printf1(fmt, arg1) {}
+#define dbg_printf2(fmt, arg1, arg2) {}
+#define dbg_printf3(fmt, arg1, arg2, arg3) {}
+#endif
+
 #if HAVE_PHASH
 
 struct ph_audio_hash
@@ -284,14 +295,13 @@ PHP_FUNCTION(ph_dct_videohash2)
 		return;
 	}
 
-	//printf("File: %s\n", file);
+	dbg_printf1("php: ph_dct_videohash2: File: %s\n", file);
 	
 	// compute pHash
-	int len = 0;
-	ulong64 *video_hash = ph_dct_videohash(file, len);
-	//printf("Hash Length: %d\n", len);
+	size_t len = 0;
+	ulong64 *video_hash = ph_dct_videohash2(file, len);
 	if(video_hash) {
-		//printf("Hash Length: %d\n", len);
+		dbg_printf1("php: ph_dct_videohash2: Hash Length: %zu\n", len);
 		// allocate memory for output string
 		char* hashstr =  static_cast<char*>(emalloc(len * 16 + 1));
 		if (hashstr) {
@@ -309,7 +319,7 @@ PHP_FUNCTION(ph_dct_videohash2)
 			// free memory allocated by pHash
 			free(video_hash);
 			
-			//printf("Hash: %s\n", hashstr);
+			dbg_printf1("php: ph_dct_videohash2: Hash: %s\n", hashstr);
 			
 			RETURN_STRING(hashstr, 0);
 		} else {
@@ -552,49 +562,6 @@ struct emem_ptr
 	T* m_p;
 };
 
-// [IP] fast hamming distance computation with GCC specific code
-#define fast_hamming_distance_gcc(a, b) __builtin_popcountll((a) ^ (b))
-
-
-// [IP] custom distance computations suitable for long videos
-// based on the original libphash function ph_dct_videohash_dist()
-static int ph_dct_videohash_dist2x(
-	const ulong64 *hashA, int N1, 
-	const ulong64 *hashB, int N2, 
-	const int threshold, double* result)
-{
-    size_t sa = N1 + 1;
-    size_t sb = N2 + 1; 
-    emem_ptr<int> C(emalloc(sa * sb * sizeof(int)));
-    if (!C) {
-	    return -1;
-    }
-
-    int *p = C.m_p + sb;
-    for (size_t i = 1; i < sa; ++i, p += sb) {
-	    *p = 0;
-    }
-    memset(C.m_p, 0, sb * sizeof(int));
-
-    p = C.m_p + sb + 1;
-    const ulong64* hA = hashA;
-    for (size_t i = 1; i < sa; ++i, ++p, ++hA) {
-	const ulong64* hB = hashB;
-	for (size_t j = 1; j < sb; ++j, ++p, ++hB) {
-	    int d = fast_hamming_distance_gcc(*hA, *hB);
-	    if (d <= threshold) {
-		*p = *(p - sb - 1) + 1;
-	    } else {
-		*p = std::max(*(p - sb), *(p-1));
-	    }
-	}
-    }
-
-    *result = static_cast<double>(C.m_p[N1 * sb + N2]) 
-	    / static_cast<double>(std::min(N1, N2));
-
-    return 0;
-}
 
 // [IP] Our custom functon
 /* {{{ proto float ph_video_dist2(string h1, string h2, int thresh=21)
@@ -649,7 +616,7 @@ PHP_FUNCTION(ph_video_dist2)
 	//printf(">>> 5\n");
 
 	double sim = 0.0;
-	if(ph_dct_videohash_dist2x(
+	if(ph_dct_videohash_dist2(
 		reinterpret_cast<const ulong64*>(bh1.m_p), h1_len / 16, 
 		reinterpret_cast<const ulong64*>(bh2.m_p), h2_len / 16,
 		thresh, &sim) < 0) {

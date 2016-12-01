@@ -26,6 +26,11 @@
 #include "config.h"
 #ifdef HAVE_VIDEO_HASH
 #include "cimgffmpeg.h"
+#include <memory>
+#include <list>
+#include <vector>
+#include <cmath>
+#include <algorithm>
 #endif
 
 #ifdef HAVE_PTHREAD
@@ -295,8 +300,6 @@ cleanup:
     return result;
 }
 
-#define max(a,b) (((a)>(b))?(a):(b))
-
 int ph_image_digest(const char *file, double sigma, double gamma, Digest &digest, int N){
     
     CImg<uint8_t> src(file);
@@ -475,6 +478,10 @@ DP** ph_dct_image_hashes(char *files[], int count, int threads)
 
 #if defined(HAVE_VIDEO_HASH) && defined(HAVE_IMAGE_HASH)
 
+static void AddKeyFrameToImageList_Callback(void* data, const CImg<uint8_t>& image)
+{
+	static_cast< CImgList<uint8_t> *>(data)->push_back(image);
+}
 
 CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename){
 
@@ -514,7 +521,7 @@ CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename){
     int nbread = 0;
     int k=0;
     do {
-	nbread = NextFrames(&st_info, pframelist);
+	nbread = NextFrames2(&st_info, &AddKeyFrameToImageList_Callback, (void*)pframelist);
 	if (nbread < 0){
 	    delete pframelist;
 	    free(dist);
@@ -634,7 +641,7 @@ CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename){
     k = 0;
     do {
 	if (bnds[k]==2){
-	    if (ReadFrames(&st_info, pframelist, k*st_info.step,k*st_info.step + 1) < 0){
+	    if (ReadFrames2(&st_info, &AddKeyFrameToImageList_Callback, (void*)pframelist, k*st_info.step,k*st_info.step + 1) < 0){
 		delete pframelist;
 		free(dist);
 		return NULL;
@@ -690,6 +697,213 @@ ulong64* ph_dct_videohash(const char *filename, int &Length){
     C = NULL;
     return hash;
 }
+
+
+static std::auto_ptr< CImg<float> > GLOBAL_PH_DCT_MATRIX_32(ph_dct_matrix(32));
+static CImg<float> GLOBAL_PH_DCT_MATRIX_32_TRANSPOSED = GLOBAL_PH_DCT_MATRIX_32->get_transpose();
+
+struct OptimizedPHashContext
+{
+	OptimizedPHashContext() :
+		prev(64,1,1,1,0)
+	{
+	}
+	std::vector<float> dist;
+	size_t k_idx;
+	CImg<float> prev;
+	std::list<ulong64> hashes;
+};
+
+static void HashFrame_Callback(void* data, const CImg<uint8_t>& image)
+{
+	OptimizedPHashContext* ctx = static_cast<OptimizedPHashContext*>(data);
+	CImg<uint8_t> currentframe = image;
+	currentframe.blur(1.0);
+	CImg<float> dctImage = (*GLOBAL_PH_DCT_MATRIX_32) * currentframe * GLOBAL_PH_DCT_MATRIX_32_TRANSPOSED;
+	CImg<float> subsec = dctImage.crop(1,1,8,8).unroll('x');
+	const float med = subsec.median();
+	ulong64 hash = 0, one = 1;
+	for (int j = 0; j < 64; ++j, one <<= 1) {
+	    if (subsec(j) > med)
+		hash |= one;
+	}
+	ctx->hashes.push_back(hash);
+}
+
+static void HistFrame_Callback(void* data, const CImg<uint8_t>& image)
+{
+	OptimizedPHashContext* ctx = static_cast<OptimizedPHashContext*>(data);
+	if(ctx->k_idx < ctx->dist.size()) {
+		CImg<float> hist = image.get_histogram(64,0,255);
+		float d = 0.0;
+		ctx->dist[ctx->k_idx] = 0.0;
+		cimg_forX(hist, X){
+			d =  fabsf(hist(X) - ctx->prev(X));
+			ctx->dist[ctx->k_idx] += d;
+			ctx->prev(X) = hist(X);
+		}
+		ctx->k_idx++;
+	}
+}
+
+
+static void ProcessKeyFramesFromVideo(const char *filename, OptimizedPHashContext& ctx)
+{
+    long N =  GetNumberVideoFrames(filename);
+
+    if (N < 0) {
+	return;
+    }
+    
+    float frames_per_sec = 0.5*fps(filename);
+    if (frames_per_sec < 0){
+	return;
+    }
+
+    int step = (int)(frames_per_sec + ROUNDING_FACTOR(frames_per_sec));
+    long nbframes = (long)(N/step);
+    ctx.dist.resize(nbframes);
+
+
+    VFInfo st_info;
+    st_info.filename = filename;
+    st_info.nb_retrieval = 100;
+    st_info.step = step;
+    st_info.pixelformat = 0;
+    st_info.pFormatCtx = NULL;
+    st_info.width = -1;
+    st_info.height = -1;
+
+    int nbread;
+    ctx.k_idx = 0;
+    do {
+	nbread = NextFrames2(&st_info, &HistFrame_Callback, (void*)&ctx);
+	if (nbread < 0){
+	    return;
+	}
+    } while ((nbread >= st_info.nb_retrieval)&&(ctx.k_idx < nbframes));
+    vfinfo_close(&st_info);
+
+    int S = 10;
+    int L = 50;
+    int alpha1 = 3;
+    int alpha2 = 2;
+    int s_begin, s_end;
+    int l_begin, l_end;
+    
+    std::vector<uint8_t> bnds(nbframes);
+
+    int nbboundaries = 0;
+    long k = 1;
+    bnds[0] = 1;
+    do {
+	s_begin = (k-S >= 0) ? k-S : 0;
+	s_end   = (k+S < nbframes) ? k+S : nbframes-1;
+	l_begin = (k-L >= 0) ? k-L : 0;
+	l_end   = (k+L < nbframes) ? k+L : nbframes-1;
+
+	/* get global average */
+	float ave_global, sum_global = 0.0, dev_global = 0.0;
+	for (int i=l_begin;i<=l_end;i++){
+	    sum_global += ctx.dist[i];
+	}
+	ave_global = sum_global/((float)(l_end-l_begin+1));
+
+	/*get global deviation */
+	for (int i=l_begin;i<=l_end;i++){
+	    float dev = ave_global - ctx.dist[i];
+	    dev = (dev >= 0) ? dev : -1*dev;
+	    dev_global += dev;
+	}
+	dev_global = dev_global/((float)(l_end-l_begin+1));
+
+	/* global threshold */
+	float T_global = ave_global + alpha1*dev_global;
+
+	/* get local maximum */
+	int localmaxpos = s_begin;
+	for (int i=s_begin;i<=s_end;i++){
+	    if (ctx.dist[i] > ctx.dist[localmaxpos])
+		localmaxpos = i;
+	}
+        /* get 2nd local maximum */
+	int localmaxpos2 = s_begin;
+	float localmax2 = 0;
+	for (int i=s_begin;i<=s_end;i++){
+	    if (i == localmaxpos)
+		continue;
+	    if (ctx.dist[i] > localmax2){
+		localmaxpos2 = i;
+		localmax2 = ctx.dist[i];
+	    }
+	}
+        float T_local = alpha2 * ctx.dist[localmaxpos2];
+	float Thresh = (T_global >= T_local) ? T_global : T_local;
+
+	if ((ctx.dist[k] == ctx.dist[localmaxpos]) && (ctx.dist[k] > Thresh)){
+	    bnds[k] = 1;
+	    nbboundaries++;
+	}
+	else {
+	    bnds[k] = 0;
+	}
+	k++;
+    } while ( k < nbframes-1);
+    bnds[nbframes-1]=1;
+    nbboundaries += 2;
+
+    int start = 0;
+    int end = 0;
+    int nbselectedframes = 0;
+    do {
+	/* find next boundary */
+	do {end++;} while ((bnds[end]!=1)&&(end < nbframes));
+       
+	/* find min disparity within bounds */
+	int minpos = start+1;
+	for (int i=start+1; i < end;i++){
+	    if (ctx.dist[i] < ctx.dist[minpos])
+		minpos = i;
+	}
+	bnds[minpos] = 2;
+	nbselectedframes++;
+	start = end;
+    } while (start < nbframes-1);
+
+    st_info.nb_retrieval = 1;
+    st_info.width = 32;
+    st_info.height = 32;
+    k = 0;
+    do {
+	if (bnds[k]==2){
+	    if (ReadFrames2(&st_info, &HashFrame_Callback, (void*)&ctx, k*st_info.step,k*st_info.step + 1) < 0){
+		ctx.hashes.clear();
+		return;
+	    }
+	}
+	k++;
+    } while (k < nbframes);
+    vfinfo_close(&st_info);
+}
+
+ulong64* ph_dct_videohash2(const char *filename, size_t &Length)
+{
+	ulong64 *hash = NULL;
+	OptimizedPHashContext ctx;
+	ProcessKeyFramesFromVideo(filename, ctx);
+	if (!ctx.hashes.empty()) {
+		hash = (ulong64*)malloc(sizeof(ulong64) * ctx.hashes.size());
+		if(hash) {
+			size_t idx = 0;
+			for (std::list<ulong64>::const_iterator it = ctx.hashes.begin(); it != ctx.hashes.end(); ++it, ++idx) {
+				hash[idx] = *it;
+			}
+			Length = ctx.hashes.size();
+		}
+	}
+	return hash;
+}
+
 
 #ifdef HAVE_PTHREAD
 void *ph_video_thread(void *p)
@@ -793,6 +1007,37 @@ double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int
     double result = (double)(C[N1][N2])/(double)(den);
 
     return result;
+}
+
+// [IP] custom distance computations suitable for long videos
+// based on the original libphash function ph_dct_videohash_dist()
+int ph_dct_videohash_dist2(
+	const ulong64 *hashA, int N1, 
+	const ulong64 *hashB, int N2, 
+	const int threshold, double* result)
+{
+    size_t sa = N1 + 1;
+    size_t sb = N2 + 1;
+    std::vector<int> C(sa * sb, 0);
+
+    int* p = &C[sb + 1];
+    const ulong64* hA = hashA;
+    for (size_t i = 1; i < sa; ++i, ++p, ++hA) {
+	const ulong64* hB = hashB;
+	for (size_t j = 1; j < sb; ++j, ++p, ++hB) {
+	    int d = ph_fast_hamming_distance(*hA, *hB);
+	    if (d <= threshold) {
+		*p = *(p - sb - 1) + 1;
+	    } else {
+		*p = std::max(*(p - sb), *(p-1));
+	    }
+	}
+    }
+
+    *result = static_cast<double>(C[N1 * sb + N2]) 
+	    / static_cast<double>(std::min(N1, N2));
+
+    return 0;
 }
 
 #endif

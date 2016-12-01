@@ -310,9 +310,26 @@ static CImgList<uint8_t>* ph_getKeyFramesFromVideo(const char *filename);
 
 ulong64* ph_dct_videohash(const char *filename, int &Length);
 
+// [IP] Hash computation with lower memory overhead
+ulong64* ph_dct_videohash2(const char *filename, size_t &Length);
+
+
 DP** ph_dct_video_hashes(char *files[], int count, int threads = 0);
 
 double ph_dct_videohash_dist(ulong64 *hashA, int N1, ulong64 *hashB, int N2, int threshold=21);
+
+// [IP] custom distance computations suitable for long videos
+// based on the original libphash function ph_dct_videohash_dist()
+int ph_dct_videohash_dist2(
+	const ulong64 *hashA, int N1, 
+	const ulong64 *hashB, int N2, 
+	const int threshold, double* result);
+
+// [IP] fast hamming distance computation with compiler specific code
+#ifdef __GNUC__
+#define ph_fast_hamming_distance(a, b) __builtin_popcountll((a) ^ (b))
+#endif
+
 #endif
 
 /* ! /brief dct video robust hash

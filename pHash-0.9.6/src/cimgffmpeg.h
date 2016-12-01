@@ -58,10 +58,12 @@ typedef struct vf_info {
 
 void vfinfo_close(VFInfo  *vfinfo);
 
-int ReadFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList, unsigned int low_index, unsigned int hi_index);
+typedef void (*OnFrameCallabck)(void*, const CImg<uint8_t>&);
+
+int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, unsigned int low_index, unsigned int hi_index);
 
 
-int NextFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList);
+int NextFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data);
 
 
 int GetNumberStreams(const char *file);

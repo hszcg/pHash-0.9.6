@@ -36,7 +36,7 @@ void vfinfo_close(VFInfo  *vfinfo){
     }
 }
 
-int ReadFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList, unsigned int low_index, unsigned int hi_index)
+int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, unsigned int low_index, unsigned int hi_index)
 {
         //target pixel format
 	PixelFormat ffmpeg_pixfmt;
@@ -155,7 +155,7 @@ int ReadFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList, unsigned int low_
 			
 		  next_image.assign(*pConvertedFrame->data, channels,st_info->width,st_info->height,1,true);
 		  next_image.permute_axes("yzcx");
-		  pFrameList->push_back(next_image);
+		  callback(callback_data, next_image);
 		  size++;
 		  }    
 		  st_info->current_index++;
@@ -187,7 +187,7 @@ int ReadFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList, unsigned int low_
 }
 
 
-int NextFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList)
+int NextFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data)
 {
         PixelFormat ffmpeg_pixfmt;
 	if (st_info->pixelformat == 0)
@@ -311,7 +311,7 @@ int NextFrames(VFInfo *st_info, CImgList<uint8_t> *pFrameList)
 				   	
 				next_image.assign(*pConvertedFrame->data, channels, st_info->width,st_info->height,1,true);
 				next_image.permute_axes("yzcx");
-				pFrameList->push_back(next_image);
+				callback(callback_data, next_image);
 				size++;
 				   	 
 		    	}    
