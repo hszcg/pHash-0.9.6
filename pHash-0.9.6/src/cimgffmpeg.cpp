@@ -449,13 +449,18 @@ float fps(const char *filename)
         float result = 0;
 	AVFormatContext *pFormatCtx = NULL;
 	
+	debug_printf(("Opening file %s\n", filename));
 	// Open video file
 	if (avformat_open_input(&pFormatCtx, filename, NULL, NULL))
 	  return -1 ; // Couldn't open file
+	debug_printf(("Opened file %s\n", filename));
 				 
 	// Retrieve stream information
-	if(avformat_find_stream_info(pFormatCtx,NULL)<0)
+	if(avformat_find_stream_info(pFormatCtx,NULL)<0) {
+	  avformat_close_input(&pFormatCtx);
 	  return -1; // Couldn't find stream information
+	}
+	debug_printf(("Found stream info\n"));
 			
 	// Find the first video stream
 	int videoStream=-1;
@@ -467,20 +472,28 @@ float fps(const char *filename)
 			    break;
 		     }
 	}
-        if(videoStream==-1)
+        if(videoStream==-1) {
+	   debug_printf(("Video stream not found\n"));
+	   avformat_close_input(&pFormatCtx); 
 	    return -1; // Didn't find a video stream
+	}
+
+	debug_printf(("Video stream index %d\n", videoStream));
+	AVStream *str = pFormatCtx->streams[videoStream];
 	
-	int num = (pFormatCtx->streams[videoStream]->r_frame_rate).num;
-	int den = (pFormatCtx->streams[videoStream]->r_frame_rate).den;
+	int num = str->r_frame_rate.num;
+	int den = str->r_frame_rate.den;
 	debug_printf(("pFormatCtx->streams[videoStream]->r_frame_rate: num=%d, den=%d\n", num, den));
 	if (den == 0) {
-		int num = (pFormatCtx->streams[videoStream]->avg_frame_rate).num;
-		int den = (pFormatCtx->streams[videoStream]->avg_frame_rate).den;		
+		int num = str->avg_frame_rate.num;
+		int den = str->avg_frame_rate.den;		
+		debug_printf(("pFormatCtx->streams[videoStream]->avg_frame_rate: num=%d, den=%d\n", num, den));
 	}
-	result = den == 0 ? 0 : num/den;
+	result = den == 0 ? -1 : (float)num/den;
 
 	avformat_close_input(&pFormatCtx);
-	
+
+	debug_printf(("FPS=%f\n", result));
 	return result;
 
 }
