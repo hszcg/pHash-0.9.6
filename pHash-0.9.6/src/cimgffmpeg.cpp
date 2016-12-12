@@ -22,6 +22,17 @@
 
 */
 
+//#define DEBUG_FFMPEG
+#ifdef DEBUG_FFMPEG
+# define debug_printf(x) \
+{ \
+	printf("%s(%d): %s: ", __FILE__, __LINE__, __func__); \
+	printf x; \
+	fflush(stdout); \
+}
+#else
+# define debug_printf(x) do {} while (0)
+#endif
 
 #include "cimgffmpeg.h"
 
@@ -51,17 +62,22 @@ int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, 
 	    st_info->current_index= 0;
 
         av_log_set_level(AV_LOG_QUIET);
-	    av_register_all();
+	av_register_all();
+
+	debug_printf(("Opening file %s\n", st_info->filename));
 	
 	    // Open video file
 	    if(avformat_open_input(&st_info->pFormatCtx, st_info->filename, NULL, NULL)!=0)
 		return -1 ; // Couldn't open file
+		
+	debug_printf(("File %s opened.\n", st_info->filename));
 	 
 	    // Retrieve stream information
 	    if(avformat_find_stream_info(st_info->pFormatCtx,NULL)<0)
 		return -1; // Couldn't find stream information
 	
 	    //dump_format(pFormatCtx,0,NULL,0);//debugging function to print infomation about format
+	debug_printf(("Stream info found.\n"));
 	
 	    unsigned int i;
 	    // Find the video stream
@@ -366,12 +382,15 @@ long GetNumberVideoFrames(const char *file)
     av_log_set_level(AV_LOG_QUIET);
 	av_register_all();
 	// Open video file
+	debug_printf(("Opening file %s\n", file));
 	if (avformat_open_input(&pFormatCtx, file, NULL, NULL))
 	  return -1 ; // Couldn't open file
+	debug_printf(("Opened file %s\n", file));
 			 
 	// Retrieve stream information
 	if(avformat_find_stream_info(pFormatCtx, NULL)<0)
 	  return -1; // Couldn't find stream information
+	debug_printf(("Found stream info\n"));
 		
 	// Find the first video stream
 	int videoStream=-1;
@@ -384,23 +403,43 @@ long GetNumberVideoFrames(const char *file)
              }
 	}
 	if(videoStream==-1)
+	{
+	   debug_printf(("Video stream not found\n"));
+	   avformat_close_input(&pFormatCtx); 
 	   return -1; // Didn't find a video stream
+	}
+	debug_printf(("Video stream index %d\n", videoStream));
 	AVStream *str = pFormatCtx->streams[videoStream];
 		
         nb_frames = str->nb_frames;
 	if (nb_frames > 0)
-	{   //the easy way if value is already contained in struct 
-	    avformat_close_input(&pFormatCtx);
-	    return nb_frames;
+	{   //the easy way if value is already contained in struct
+		avformat_close_input(&pFormatCtx);
+		debug_printf(("Easy nb_frames available: %ld\n", nb_frames));
+		return nb_frames;
 	}
 	else { // frames must be counted
-	    AVPacket packet;
+		//AVPacket packet;
 		nb_frames = (long)av_index_search_timestamp(str,str->duration, AVSEEK_FLAG_ANY|AVSEEK_FLAG_BACKWARD);
+		debug_printf(("timestamp by index: %ld\n", nb_frames));
+		if (nb_frames <= 0) {
+			debug_printf(("str->duration: %ld\n", str->duration));
+			if (str->duration > 0) {
+				int timebase = str->time_base.den / str->time_base.num;
+				nb_frames = str->duration/timebase;
+			} else {
+				debug_printf(("pFormatCtx->duration: %ld\n", pFormatCtx->duration));
+				debug_printf(("str->avg_frame_rate: %d/%d\n", 
+					str->avg_frame_rate.num, str->avg_frame_rate.den));
+				if(pFormatCtx->duration > 0) {
+					nb_frames = (((long double)pFormatCtx->duration/AV_TIME_BASE) 
+						* str->avg_frame_rate.num) / str->avg_frame_rate.den;
+				}
+			}
+		}
 		// Close the video file
-		 int timebase = str->time_base.den / str->time_base.num;
-               if (nb_frames <= 0)
-                       nb_frames = str->duration/timebase;
 		avformat_close_input(&pFormatCtx); 
+		debug_printf(("Counted nb_frames: %ld\n", nb_frames));
 		return nb_frames;
 	}
 }
@@ -433,7 +472,12 @@ float fps(const char *filename)
 	
 	int num = (pFormatCtx->streams[videoStream]->r_frame_rate).num;
 	int den = (pFormatCtx->streams[videoStream]->r_frame_rate).den;
-	result = num/den;
+	debug_printf(("pFormatCtx->streams[videoStream]->r_frame_rate: num=%d, den=%d\n", num, den));
+	if (den == 0) {
+		int num = (pFormatCtx->streams[videoStream]->avg_frame_rate).num;
+		int den = (pFormatCtx->streams[videoStream]->avg_frame_rate).den;		
+	}
+	result = den == 0 ? 0 : num/den;
 
 	avformat_close_input(&pFormatCtx);
 	
