@@ -483,17 +483,31 @@ float fps(const char *filename)
 	
 	int num = str->r_frame_rate.num;
 	int den = str->r_frame_rate.den;
-	debug_printf(("pFormatCtx->streams[videoStream]->r_frame_rate: num=%d, den=%d\n", num, den));
-	if (den == 0) {
-		int num = str->avg_frame_rate.num;
-		int den = str->avg_frame_rate.den;		
-		debug_printf(("pFormatCtx->streams[videoStream]->avg_frame_rate: num=%d, den=%d\n", num, den));
+	debug_printf(("str->r_frame_rate: num=%d, den=%d\n", num, den));
+	result = den == 0 ? 0.0f : (float)num/den;
+	debug_printf(("Current FPS=%f\n", result));
+	if (result == 0.0f) {
+		num = str->avg_frame_rate.num;
+		den = str->avg_frame_rate.den;		
+		debug_printf(("str->avg_frame_rate: num=%d, den=%d\n", num, den));
+		result = den == 0 ? 0.0f : (float)num/den;
+		debug_printf(("Current FPS=%f\n", result));
 	}
-	result = den == 0 ? -1 : (float)num/den;
+	if (result == 0.0f) {
+		num = str->codec->time_base.num;
+		den = str->codec->time_base.den;		
+		debug_printf(("str->codec->time_base: num=%d, den=%d\n", num, den));
+		// fps = 1.0 / timebase
+		result = num == 0 ? 0.0f : (float)den/num;
+		debug_printf(("Current FPS=%f\n", result));
+	}
+	if (result == 0.0f) {
+		result = -1;
+	}
 
 	avformat_close_input(&pFormatCtx);
 
-	debug_printf(("FPS=%f\n", result));
+	debug_printf(("Final FPS=%f\n", result));
 	return result;
 
 }
