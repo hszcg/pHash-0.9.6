@@ -22,6 +22,7 @@
 
 */
 
+#include "debug.h"
 #include "pHash.h"
 #include "config.h"
 #ifdef HAVE_VIDEO_HASH
