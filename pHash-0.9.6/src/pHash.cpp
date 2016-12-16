@@ -751,12 +751,14 @@ static void HistFrame_Callback(void* data, const CImg<uint8_t>& image)
 static void ProcessKeyFramesFromVideo(const char *filename, OptimizedPHashContext& ctx)
 {
     long N =  GetNumberVideoFrames(filename);
-
+	debug_printf(("NUMBER of frames: %ld\n", N));
     if (N < 0) {
 	return;
     }
     
-    float frames_per_sec = 0.5*fps(filename);
+    float fpsn = fps(filename);
+    float frames_per_sec = 0.5*fpsn;
+    debug_printf(("FPS/2: %f\n", (double)frames_per_sec));
     if (frames_per_sec < 0){
 	return;
     }
@@ -765,6 +767,7 @@ static void ProcessKeyFramesFromVideo(const char *filename, OptimizedPHashContex
     long nbframes = (long)(N/step);
     ctx.dist.resize(nbframes);
 
+	debug_printf(("STEP %d, nbframes %ld\n", step, nbframes));
 
     VFInfo st_info;
     st_info.filename = filename;
@@ -780,10 +783,14 @@ static void ProcessKeyFramesFromVideo(const char *filename, OptimizedPHashContex
     do {
 	nbread = NextFrames2(&st_info, &HistFrame_Callback, (void*)&ctx);
 	if (nbread < 0){
+	debug_printf(("Read error\n"));
 	    return;
 	}
+	debug_printf(("Read progress\n"));
     } while ((nbread >= st_info.nb_retrieval)&&(ctx.k_idx < nbframes));
     vfinfo_close(&st_info);
+
+	debug_printf(("picked %zu histogram frames\n", ctx.dist.size()));
 
     int S = 10;
     int L = 50;
@@ -871,16 +878,21 @@ static void ProcessKeyFramesFromVideo(const char *filename, OptimizedPHashContex
 	start = end;
     } while (start < nbframes-1);
 
+    debug_printf(("selected %d frames for hashing\n", nbselectedframes));
+
     st_info.nb_retrieval = 1;
     st_info.width = 32;
     st_info.height = 32;
     k = 0;
+    long kf = 0;
     do {
 	if (bnds[k]==2){
+		debug_printf(("reading keyframe %ld - frames %ld\n", kf, k));
 	    if (ReadFrames2(&st_info, &HashFrame_Callback, (void*)&ctx, k*st_info.step,k*st_info.step + 1) < 0){
 		ctx.hashes.clear();
 		return;
 	    }
+	    ++kf;
 	}
 	k++;
     } while (k < nbframes);
@@ -891,8 +903,10 @@ ulong64* ph_dct_videohash2(const char *filename, size_t &Length)
 {
 	ulong64 *hash = NULL;
 	OptimizedPHashContext ctx;
+	debug_printf(("computing hashes...\n"));
 	ProcessKeyFramesFromVideo(filename, ctx);
 	if (!ctx.hashes.empty()) {
+		debug_printf(("computed %zu hashes\n", ctx.hashes.size()));
 		hash = (ulong64*)malloc(sizeof(ulong64) * ctx.hashes.size());
 		if(hash) {
 			size_t idx = 0;
