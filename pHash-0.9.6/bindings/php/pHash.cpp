@@ -23,7 +23,7 @@
 #include <cstring>
 #include <algorithm>
 
-// #define DEBUG_NEW_VIDEO_PHASH
+#define DEBUG_NEW_VIDEO_PHASH
 #ifdef DEBUG_NEW_VIDEO_PHASH
 #define dbg_printf1(fmt, arg1) printf(fmt, arg1)
 #define dbg_printf2(fmt, arg1, arg2) printf(fmt, arg1, arg2)
@@ -116,7 +116,8 @@ extern "C" void ph_txt_hash_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 zend_function_entry pHash_functions[] = {
 #if HAVE_VIDEO_HASH
 	PHP_FE(ph_dct_videohash    , ph_dct_videohash_arg_info)
-	PHP_FE(ph_dct_videohash2   , ph_dct_videohash2_arg_info) // [IP] custom functions
+	PHP_FE(ph_dct_videohash2   , ph_dct_videohash2_arg_info) // [IP] custom function
+	PHP_FE(ph_dct_videohash3   , ph_dct_videohash3_arg_info) // [IP] custom function
 #endif /* HAVE_VIDEO_HASH */
 #if HAVE_IMAGE_HASH
 	PHP_FE(ph_dct_imagehash    , ph_dct_imagehash_arg_info)
@@ -284,6 +285,7 @@ static inline void put_hex_symbol(char* pdest, unsigned char hex)
 	*pdest = hex + ((hex < 10) ? '0' : 'A' - 10);
 }
 
+// [IP] our custom function
 /* {{{ proto string ph_video_hash ph_dct_videohash2(string file)
   pHash DCT video hash as string */
 PHP_FUNCTION(ph_dct_videohash2)
@@ -330,6 +332,56 @@ PHP_FUNCTION(ph_dct_videohash2)
 	RETURN_FALSE;
 }
 /* }}} ph_dct_videohash2 */
+
+
+// [IP] our custom function
+/* {{{ proto string ph_video_hash ph_dct_videohash2(string file)
+  pHash DCT video hash as string */
+PHP_FUNCTION(ph_dct_videohash3)
+{
+	const char * file = NULL;
+	int file_len = 0;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &file, &file_len) == FAILURE) {
+		return;
+	}
+
+	dbg_printf1("php: ph_dct_videohash3: File: %s\n", file);
+	
+	// compute pHash
+	int len0 = 0;
+	ulong64 *video_hash = ph_dct_videohash(file, len0);
+	size_t len = len0;
+	if(video_hash) {
+		dbg_printf1("php: ph_dct_videohash3: Hash Length: %zu\n", len);
+		// allocate memory for output string
+		char* hashstr =  static_cast<char*>(emalloc(len * 16 + 1));
+		if (hashstr) {
+			// build output string
+			char* dest = hashstr;
+			const unsigned char* src = reinterpret_cast<unsigned char*>(video_hash);
+			const unsigned char* src_end = src + len * 8;
+			while (src != src_end) {
+				put_hex_symbol(dest++, (*src) >> 4);
+				put_hex_symbol(dest++, (*src) & 0xF);
+				++src;
+			}
+			*dest = 0;
+			
+			// free memory allocated by pHash
+			free(video_hash);
+			
+			dbg_printf1("php: ph_dct_videohash3: Hash: %s\n", hashstr);
+			
+			RETURN_STRING(hashstr, 0);
+		} else {
+			// free memory allocated by pHash
+			free(video_hash);
+		}
+	}
+	RETURN_FALSE;
+}
+/* }}} ph_dct_videohash3 */
 
 #endif /* HAVE_VIDEO_HASH */
 

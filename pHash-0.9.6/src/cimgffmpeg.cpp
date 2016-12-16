@@ -39,11 +39,11 @@ void vfinfo_close(VFInfo  *vfinfo){
 int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, unsigned int low_index, unsigned int hi_index)
 {
         //target pixel format
-	PixelFormat ffmpeg_pixfmt;
+	AVPixelFormat ffmpeg_pixfmt;
 	if (st_info->pixelformat == 0)
-	    ffmpeg_pixfmt = PIX_FMT_GRAY8;
+	    ffmpeg_pixfmt = AV_PIX_FMT_GRAY8;
 	else 
-	    ffmpeg_pixfmt = PIX_FMT_RGB24;
+	    ffmpeg_pixfmt = AV_PIX_FMT_RGB24;
 
 	st_info->next_index = low_index;
 
@@ -118,12 +118,14 @@ int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, 
         AVFrame *pFrame;
 
 	// Allocate video frame
-	pFrame=avcodec_alloc_frame();
+	//pFrame=avcodec_alloc_frame();
+	pFrame = av_frame_alloc();
 	if (pFrame==NULL)
 	    return -1;
 
 	// Allocate an AVFrame structure
-	AVFrame *pConvertedFrame = avcodec_alloc_frame();
+	//AVFrame *pConvertedFrame = avcodec_alloc_frame();
+	AVFrame *pConvertedFrame = av_frame_alloc();
 	if(pConvertedFrame==NULL) {
 		  vfinfo_close(st_info);
 		return -1;
@@ -144,7 +146,7 @@ int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, 
 	int size = 0;
 	
 
-        int channels = ffmpeg_pixfmt == PIX_FMT_GRAY8 ? 1 : 3;
+        int channels = ffmpeg_pixfmt == AV_PIX_FMT_GRAY8 ? 1 : 3;
 
 	AVPacket packet;
 	int result = 1;
@@ -210,11 +212,11 @@ int ReadFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data, 
 
 int NextFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data)
 {
-        PixelFormat ffmpeg_pixfmt;
+        AVPixelFormat ffmpeg_pixfmt;
 	if (st_info->pixelformat == 0)
-	    ffmpeg_pixfmt = PIX_FMT_GRAY8;
+	    ffmpeg_pixfmt = AV_PIX_FMT_GRAY8;
         else 
-	    ffmpeg_pixfmt = PIX_FMT_RGB24;
+	    ffmpeg_pixfmt = AV_PIX_FMT_RGB24;
 
 	if (st_info->pFormatCtx == NULL)
 	{
@@ -303,16 +305,19 @@ int NextFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data)
 		st_info->width = (st_info->width<=0) ? st_info->pCodecCtx->width : st_info->width;
 		st_info->height = (st_info->height<=0) ? st_info->pCodecCtx->height : st_info->height;
 		
-	} 
-		debug_printf(("File already opened %s", st_info->filename));
-
+	} else {
+		debug_printf(("File already opened %s\n", st_info->filename));
+	}
+	
 	AVFrame *pFrame;
 
 	// Allocate video frame
-	pFrame=avcodec_alloc_frame();
+	//pFrame=avcodec_alloc_frame();
+	pFrame=av_frame_alloc();
 		
 	// Allocate an AVFrame structure
-	AVFrame *pConvertedFrame = avcodec_alloc_frame();
+//	AVFrame *pConvertedFrame = avcodec_alloc_frame();
+	AVFrame *pConvertedFrame = av_frame_alloc();
 	if(pConvertedFrame==NULL){
 		debug_printf(("Can't allocate frame\n"));
 		vfinfo_close(st_info);
@@ -348,7 +353,7 @@ int NextFrames2(VFInfo *st_info, OnFrameCallabck callback, void* callback_data)
 		}
 		if(packet.stream_index == st_info->videoStream) {
 			
-		int channels = ffmpeg_pixfmt == PIX_FMT_GRAY8 ? 1 : 3;
+		int channels = ffmpeg_pixfmt == AV_PIX_FMT_GRAY8 ? 1 : 3;
  		AVPacket avpkt;
                 av_init_packet(&avpkt);
                 avpkt.data = packet.data;
@@ -526,9 +531,14 @@ float fps(const char *filename)
 	debug_printf(("Video stream index %d\n", videoStream));
 	AVStream *str = pFormatCtx->streams[videoStream];
 	
+#if 0
 	int num = str->r_frame_rate.num;
 	int den = str->r_frame_rate.den;
 	debug_printf(("str->r_frame_rate: num=%d, den=%d\n", num, den));
+#else
+	int num = 0;
+	int den = 0;
+#endif
 	result = den == 0 ? 0.0f : (float)num/den;
 	debug_printf(("Current FPS=%f\n", result));
 	if (result == 0.0f) {

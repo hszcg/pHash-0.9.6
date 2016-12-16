@@ -98,6 +98,16 @@ ZEND_END_ARG_INFO()
 #define ph_dct_videohash2_arg_info NULL
 #endif
 
+// [IP] Custom function
+PHP_FUNCTION(ph_dct_videohash3);
+#if (PHP_MAJOR_VERSION >= 5)
+ZEND_BEGIN_ARG_INFO_EX(ph_dct_videohash3_arg_info, ZEND_SEND_BY_VAL, ZEND_RETURN_VALUE, 1)
+  ZEND_ARG_INFO(0, file)
+ZEND_END_ARG_INFO()
+#else /* PHP 4.x */
+#define ph_dct_videohash3_arg_info NULL
+#endif
+
 #endif /* HAVE_VIDEO_HASH */
 
 
