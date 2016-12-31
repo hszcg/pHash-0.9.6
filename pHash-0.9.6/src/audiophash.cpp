@@ -444,34 +444,33 @@ double* ph_audio_distance_ber(uint32_t *hash_a , const int Na, uint32_t *hash_b,
 	N2 = Na;
     }
 
-    double *pC = new double[Nc];
-    if (!pC)
-	return NULL;
     int k,M,nb_above, nb_below, hash1_index,hash2_index;
     double sum_above, sum_below,above_factor, below_factor;
 
     uint32_t *pha,*phb;
-    double *dist = NULL;
 
-    for (int i=0; i < Nc;i++){
+    double *pC = (double*) malloc(Nc * sizeof(double));
+    if (!pC) {
+	    return NULL;
+    }
+  
+    M = (int)floor(std::min(N1,N2)/block_size);
+    double* dist = (double*)malloc((M+1) * sizeof(double));
+    if (!dist) {
+	free(pC);
+	return NULL;
+    }
 
-	M = (int)floor(std::min(N1,N2-i)/block_size);
-
+    for (int i=0; i < Nc;i++) {
+        M = (int)floor(std::min(N1,N2-i)/block_size);
         pha = ptrA;
         phb = ptrB + i;
 
-	double *tmp_dist = (double*)realloc(dist, M*sizeof(double));
-        if (!tmp_dist){
-	    return NULL;
-        }
-        dist = tmp_dist;
-	dist[0] = ph_compare_blocks(pha,phb,block_size);
-
-	k = 1;
-
+	dist[0] = ph_compare_blocks(pha, phb, block_size);	
 	pha += block_size;
 	phb += block_size;
 
+	k = 1;
 	hash1_index = block_size;
 	hash2_index = i + block_size;
 
@@ -486,9 +485,8 @@ double* ph_audio_distance_ber(uint32_t *hash_a , const int Na, uint32_t *hash_b,
 	sum_below = 0;
 	nb_above = 0;
 	nb_below = 0;
-	for (int n = 0; n < M; n++){
-
-	    if (dist[n] <= threshold){
+	for (int n = 0; n < M; n++) {
+	    if (dist[n] <= threshold) {
 		sum_below += 1-dist[n];
 		nb_below++;
 	    } else {
