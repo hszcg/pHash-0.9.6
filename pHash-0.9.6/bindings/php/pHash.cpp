@@ -597,40 +597,6 @@ PHP_FUNCTION(ph_image_dist)
 
 #endif /* HAVE_IMAGE_HASH */
 
-
-#if HAVE_VIDEO_HASH
-
-/* {{{ proto float ph_video_dist2(resource ph_video_hash h1,resource ph_video_hash h2, int thresh=21)
-  pHash video distance. */
-PHP_FUNCTION(ph_video_dist)
-{
-	zval * h1_res = NULL;
-	int h1_resid = -1;
-	ph_video_hash * h1 = NULL;
-
-	zval * h2_res = NULL;
-	int h2_resid = -1;
-	ph_video_hash * h2 = NULL;
-
-	long thresh = 21;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr|l", &h1_res, &h2_res, &thresh) == FAILURE) {
-		return;
-	}
-	ZEND_FETCH_RESOURCE(h1, ph_video_hash *, &h1_res, h1_resid, "ph_video_hash", le_ph_video_hash);
-	ZEND_FETCH_RESOURCE(h2, ph_video_hash *, &h2_res, h2_resid, "ph_video_hash", le_ph_video_hash);
-
-	if(h1 && h2)
-	{
-		double sim = ph_dct_videohash_dist(h1->hash, h1->len, h2->hash, h2->len, thresh);
-		RETURN_DOUBLE(sim);
-	}
-	else
-		RETURN_DOUBLE(-1);
-}
-/* }}} ph_video_dist */
-
-
 static inline unsigned char decode_hex_char(char ch)
 {
 	if (isdigit(ch)) {
@@ -670,6 +636,40 @@ struct emem_ptr
 	operator bool() const { return m_p != 0; }
 	T* m_p;
 };
+
+
+#if HAVE_VIDEO_HASH
+
+/* {{{ proto float ph_video_dist2(resource ph_video_hash h1,resource ph_video_hash h2, int thresh=21)
+  pHash video distance. */
+PHP_FUNCTION(ph_video_dist)
+{
+	zval * h1_res = NULL;
+	int h1_resid = -1;
+	ph_video_hash * h1 = NULL;
+
+	zval * h2_res = NULL;
+	int h2_resid = -1;
+	ph_video_hash * h2 = NULL;
+
+	long thresh = 21;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr|l", &h1_res, &h2_res, &thresh) == FAILURE) {
+		return;
+	}
+	ZEND_FETCH_RESOURCE(h1, ph_video_hash *, &h1_res, h1_resid, "ph_video_hash", le_ph_video_hash);
+	ZEND_FETCH_RESOURCE(h2, ph_video_hash *, &h2_res, h2_resid, "ph_video_hash", le_ph_video_hash);
+
+	if(h1 && h2)
+	{
+		double sim = ph_dct_videohash_dist(h1->hash, h1->len, h2->hash, h2->len, thresh);
+		RETURN_DOUBLE(sim);
+	}
+	else
+		RETURN_DOUBLE(-1);
+}
+/* }}} ph_video_dist */
+
 
 
 // [IP] Our custom functon
