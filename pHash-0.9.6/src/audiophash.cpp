@@ -266,8 +266,8 @@ float* ph_readaudio(const char *filename, int sr, int channels, float *sigbuf, i
     return ph_readaudio2(filename, sr, sigbuf, buflen, nbsecs);
 }
 
-uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
-
+uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames)
+{
    int frame_length = 4096;//2^12
    int nfft = frame_length;
    int nfft_half = 2048;
@@ -288,6 +288,9 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
    //fftw_plan p;
    //pF = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nfft);
    complex double *pF = (complex double*)malloc(sizeof(complex double)*nfft);
+   if (!pF) {
+	   return NULL;
+   }
 
    double magnF[nfft_half];
    double maxF = 0.0;
@@ -312,6 +315,7 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
    }
    uint32_t *hash = (uint32_t*)malloc(nb_frames*sizeof(uint32_t));
    if (hash == NULL) {
+	   free(pF);
 	   return NULL;
    }
    double lof,hif;
@@ -324,6 +328,7 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
    double **wts = (double **) calloc(nfilts, sizeof(double*));
    if (wts == NULL) {
 	   free(hash);
+	   free(pF);
 	   return NULL;
    }
    
@@ -335,6 +340,7 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
 	      }
 	      free(wts);
 	      free(hash);
+	      free(pF);
 	      return NULL;
       }
    }
@@ -399,16 +405,16 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
        start += advance;
        end   += advance;
    }
-   
 
-
-   //fftw_destroy_plan(p);
-   //fftw_free(pF);
-   free(pF);
    for (int i=0;i<nfilts;i++){
        free(wts[i]);
    }
    free(wts);
+
+   //fftw_destroy_plan(p);
+   //fftw_free(pF);
+   free(pF);
+
    return hash;
 }
 
