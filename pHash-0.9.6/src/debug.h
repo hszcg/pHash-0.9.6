@@ -1,3 +1,9 @@
+/* 
+	Written by Ivan Pizhenko <ivanp2015@users.noreply.github.com>
+	https://github.com/ivanp2015/pHash-0.9.6
+	GPL3 license
+*/
+
 #ifndef PHASH__DEBUG_H__
 #define PHASH__DEBUG_H__
 

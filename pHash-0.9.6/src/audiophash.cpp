@@ -22,6 +22,11 @@
 
 */
 
+/* 
+	Modified by Ivan Pizhenko <ivanp2015@users.noreply.github.com>
+	https://github.com/ivanp2015/pHash-0.9.6
+*/
+
 #include "debug.h"
 #include "audiophash.h"
 #include <sndfile.h>

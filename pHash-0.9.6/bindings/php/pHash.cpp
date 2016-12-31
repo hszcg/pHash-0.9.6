@@ -13,7 +13,8 @@
 */
 
 /* 
-	Modified by Ivan Pizhenko <ivan [dot] pizhenko [at] gmail [dot] com >. 
+	Modified by Ivan Pizhenko <ivanp2015@users.noreply.github.com>
+	https://github.com/ivanp2015/pHash-0.9.6
 */
 
 /* $ Id: $ */
