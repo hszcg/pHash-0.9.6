@@ -548,9 +548,14 @@ PHP_FUNCTION(ph_audiohash2)
 				RETURN_STRING(hashstr, 0);
 			} else {
 				// free memory allocated by pHash
+				debug_printf(("php: ph_audiohash2: emalloc hashstr failed"));
 				free(audio_hash);
 			}
+		} else {
+			debug_printf(("php: ph_audiohash2: audio hash failed"));
 		}
+	} else {
+		debug_printf(("php: ph_audiohash2: read audio failed"));
 	}
 	RETURN_FALSE;
 }
