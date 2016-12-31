@@ -311,20 +311,32 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
        prev_bark[i] = 0.0;
    }
    uint32_t *hash = (uint32_t*)malloc(nb_frames*sizeof(uint32_t));
+   if (hash == NULL) {
+	   return NULL;
+   }
    double lof,hif;
 
    for (int i=0; i < nb_barks;i++){
        binbarks[i] = 6*asinh(i*sr/nfft_half/600.0);
        freqs[i] = i*sr/nfft_half;
    }
-   double **wts = new double*[nfilts];
-   for (int i=0;i<nfilts;i++){
-      wts[i] = new double[nfft_half];
+   
+   double **wts = (double **) calloc(nfilts, sizeof(double*));
+   if (wts == NULL) {
+	   free(hash);
+	   return NULL;
    }
+   
    for (int i=0;i<nfilts;i++){
-       for (int j=0;j<nfft_half;j++){
-	   wts[i][j] = 0.0;
-       }
+      wts[i] = (double*) calloc(nfft_half, sizeof(double));
+      if (wts[i] == NULL) {
+	      for (int j = 0; j < i; ++j) {
+		      free(wts[j]);
+	      }
+	      free(wts);
+	      free(hash);
+	      return NULL;
+      }
    }
   
    //calculate wts for each filter
@@ -394,9 +406,9 @@ uint32_t* ph_audiohash(float *buf, int N, int sr, int &nb_frames){
    //fftw_free(pF);
    free(pF);
    for (int i=0;i<nfilts;i++){
-       delete [] wts[i];
+       free(wts[i]);
    }
-   delete [] wts;
+   free(wts);
    return hash;
 }
 
