@@ -424,8 +424,10 @@ double ph_compare_blocks(const uint32_t *ptr_blockA,const uint32_t *ptr_blockB, 
     result = result/(32*block_size);
     return result;
 }
-double* ph_audio_distance_ber(uint32_t *hash_a , const int Na, uint32_t *hash_b, const int Nb, const float threshold, const int block_size, int &Nc){
 
+double* ph_audio_distance_ber(uint32_t *hash_a , const int Na, uint32_t *hash_b, 
+			      const int Nb, const float threshold, const int block_size, int &Nc)
+{
     uint32_t *ptrA, *ptrB;
     int N1, N2;
     if (Na <= Nb){
