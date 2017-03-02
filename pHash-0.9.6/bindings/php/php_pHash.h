@@ -26,6 +26,7 @@ extern "C" {
 #endif
 
 #include <php.h>
+#include "zend_api_ports.h"
 
 #ifdef HAVE_PHASH
 #define PHP_PHASH_VERSION "0.9.6"
