@@ -9,8 +9,8 @@
 	3. https://wiki.php.net/phpng-upgrading
 */
 
-#ifndef PHASH_PHP__ZEND_API_PORTS_H
-#define PHASH_PHP__ZEND_API_PORTS_H
+#ifndef PHASH_PHP__ZEND_API_PORTS_H__
+#define PHASH_PHP__ZEND_API_PORTS_H__
 
 #ifdef __cplusplus
 extern "C" {

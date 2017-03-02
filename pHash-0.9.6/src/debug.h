@@ -7,7 +7,7 @@
 #ifndef PHASH__DEBUG_H__
 #define PHASH__DEBUG_H__
 
-#define DEBUG_PHASH_LIB
+//#define DEBUG_PHASH_LIB
 #ifdef DEBUG_PHASH_LIB
 #define debug_printf(x) \
 { \

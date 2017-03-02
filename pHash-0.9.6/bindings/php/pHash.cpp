@@ -24,7 +24,7 @@
 #include <cstring>
 #include <algorithm>
 
-#define DEBUG_NEW_VIDEO_PHASH
+//#define DEBUG_NEW_VIDEO_PHASH
 #ifdef DEBUG_NEW_VIDEO_PHASH
 #define debug_printf(x) printf x
 #else
