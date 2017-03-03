@@ -23,13 +23,8 @@
 #include <cctype>
 #include <cstring>
 #include <algorithm>
+#include "debug.h"
 
-//#define DEBUG_NEW_VIDEO_PHASH
-#ifdef DEBUG_NEW_VIDEO_PHASH
-#define debug_printf(x) printf x
-#else
-#define debug_printf(x) {}
-#endif
 
 #if HAVE_PHASH
 
