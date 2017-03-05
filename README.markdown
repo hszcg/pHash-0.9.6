@@ -46,6 +46,7 @@ $ ./configure LIBS="-lpthread"
 $ make && sudo make install
 ```
 
+If you have PHP 5:
 ```
 $ sudo vi /etc/php5/conf.d/pHash.so
 extension=pHash.so
@@ -53,12 +54,19 @@ extension=pHash.so
 
 ```
 $ sudo php5enmod pHash
-```
-
-```
 $ php -m
 pHash
 ```
+
+If you have PHP 7:
+```
+sudo echo "extension=pHash.so" | sudo tee /etc/php/7.0/mods-available/pHash.ini
+sudo phpenmod pHash
+php -m
+# you should see pHash in the list
+```
+
+
 
 ## Reference
 
